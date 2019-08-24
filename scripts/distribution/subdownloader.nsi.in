@@ -1,0 +1,290 @@
+# Copyright (c) 2019 SubDownloader Developers - See COPYING - GPLv3
+# NSIS Installer generator script
+
+; Scripting reference: https://nsis.sourceforge.io/Docs/Chapter4.html
+; macro reference: https://nsis.sourceforge.io/Docs/Chapter5.html
+; MUI reference: https://nsis.sourceforge.io/Docs/Modern%%20UI/Readme.html
+; Multi-User reference: https://nsis.sourceforge.io/Docs/MultiUser/Readme.html
+
+; FIXME: check whether re-installing/updating ==> remove + install
+; FIXME: make installer multi-language
+
+; --------------------------------
+; Compile time variables set by generator script
+
+!define PRODUCT_NAME "%(name)s"
+!define PRODUCT_VERSION_STR "%(version)s"
+!define PRODUCT_VERSION_LONG "%(version_long)s"
+!define PRODUCT_VERSION_MAJOR "%(version_major)s"
+!define PRODUCT_VERSION_MINOR "%(version_minor)s"
+!define PRODUCT_PUBLISHER "%(publisher)s"
+!define PRODUCT_URL "%(url)s"
+!define PRODUCT_CONTACT "%(contact)s"
+!define PRODUCT_UPDATES "%(updates)s"
+!define PRODUCT_EXE "%(exe_base)s"
+!define PACKAGE_BIN "%(exe_dir)s"
+!define LICENSE_FILE "%(license_file)s"
+!define MODE_64_BIT_01 "%(is_64_bit_01)s"
+
+; --------------------------------
+; Compile time variables needed by includes
+
+!define PRODUCT_UNINST_REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
+
+!define MULTIUSER_EXECUTIONLEVEL Highest
+!define MULTIUSER_INSTALLMODE_FUNCTION onMultiUserModeChanged
+
+!define MULTIUSER_MUI
+!define MULTIUSER_INSTALLMODE_COMMANDLINE
+!define MUI_COMPONENTSPAGE_SMALLDESC
+!define MULTIUSER_INSTALLMODE_INSTDIR "${PRODUCT_NAME}"
+!define MULTIUSER_INSTALLMODE_DEFAULT_CURRENTUSER
+!define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_KEY "${PRODUCT_UNINST_REGKEY}"
+!define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME "InstallMode"
+!define MULTIUSER_INSTALLMODE_INSTDIR_REGISTRY_KEY "${PRODUCT_UNINST_REGKEY}"
+!define MULTIUSER_INSTALLMODE_INSTDIR_REGISTRY_VALUENAME "InstallPath"
+
+!define MULTIUSER_USE_PROGRAMFILES64 "${MODE_64_BIT_01}"
+
+; --------------------------------
+; Commands needed to be set before includes
+
+Unicode true
+RequestExecutionLevel user
+
+SetCompressor /SOLID lzma
+
+; --------------------------------
+; Includes
+
+!include FileFunc.nsh
+!include Memento.nsh
+!include MultiUser.nsh
+!include MUI2.nsh
+!include LogicLib.nsh
+
+; --------------------------------
+; Compile time variables
+
+!if ${MULTIUSER_USE_PROGRAMFILES64} == "1"
+!define ProgramFilesPath $PROGRAMFILES64
+!define ArchSuffix "-amd64"
+!else
+!define ProgramFilesPath $PROGRAMFILES32
+!define ArchSuffix "-win32"
+!endif
+
+; Where to store the selected options
+!define MEMENTO_REGISTRY_ROOT SHCTX
+!define MEMENTO_REGISTRY_KEY "${PRODUCT_UNINST_REGKEY}"
+
+; Display a warning on aborting the (de-)installation
+!define MUI_ABORTWARNING
+!define MUI_UNABORTWARNING
+
+; --------------------------------
+; Variables
+
+; Path of this program's Start Menu
+Var StartMenuFolder
+
+; Readable name of this program
+var /GLOBAL DisplayName
+
+; --------------------------------
+; Commands
+
+ManifestDPIAware true
+
+Name "${PRODUCT_NAME}"
+OutFile "${PRODUCT_NAME}-${PRODUCT_VERSION_STR}${ArchSuffix}.exe"
+
+; --------------------------------
+; Installation pages
+
+; Welcome page + options
+!insertmacro MUI_PAGE_WELCOME
+
+; License page + options
+!define MUI_LICENSEPAGE_CHECKBOX
+!insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"
+
+; Multi-user page + options
+!insertmacro MULTIUSER_PAGE_INSTALLMODE
+
+; Components page + options
+!insertmacro MUI_PAGE_COMPONENTS
+
+; Start menu page + options
+!define MUI_STARTMENUPAGE_NODISABLE
+!define MUI_PAGE_CUSTOMFUNCTION_PRE StartMenu_Pre
+!define MUI_STARTMENUPAGE_REGISTRY_ROOT SHCTX
+!define MUI_STARTMENUPAGE_REGISTRY_KEY "${PRODUCT_UNINST_REGKEY}"
+!define MUI_STARTMENUPAGE_REGISTRY_VALUENAME StartMenuFolderName
+!insertmacro MUI_PAGE_STARTMENU PageStartMenu $StartMenuFolder
+
+; Directory page + options
+!insertmacro MUI_PAGE_DIRECTORY
+
+; Installation action page + options
+!insertmacro MUI_PAGE_INSTFILES
+
+; Finish page + options
+!define MUI_FINISHPAGE_RUN $InstDir/${PRODUCT_EXE}
+!define MUI_FINISHPAGE_RUN_NOTCHECKED
+!define MUI_FINISHPAGE_NOAUTOCLOSE
+
+; !define MUI_FINISHPAGE_SHOWREADME
+; !define MUI_FINISHPAGE_SHOWREADME_TEXT Show release notes
+; !define MUI_FINISHPAGE_SHOW_README_FUNCTION
+; !define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
+
+!define MUI_FINISHPAGE_LINK "${PRODUCT_URL}"
+!define MUI_FINISHPAGE_LINK_LOCATION "${PRODUCT_URL}"
+
+!define MUI_FINISHPAGE_NOREBOOTSUPPORT
+!insertmacro MUI_PAGE_FINISH
+
+; --------------------------------
+; De-installation pages
+
+; De-installation welcome page
+!insertmacro MUI_UNPAGE_WELCOME
+
+
+; De-installation confimation page + options
+!insertmacro MUI_UNPAGE_CONFIRM
+
+
+; De-installation action page + options
+!insertmacro MUI_UNPAGE_INSTFILES
+
+; --------------------------------
+
+!insertmacro MUI_LANGUAGE "English"
+
+; --------------------------------
+; Components
+
+Section "${PRODUCT_NAME} (required)" SectionMain
+    SectionIn RO
+
+    ; Set output path to the installation directory.
+    SetOutPath $InstDir
+    ; Copy all files here
+    File /r "${PACKAGE_BIN}\*"
+
+    WriteUninstaller "uninstall.exe"
+
+    ; Write the installation details into the registry
+    WriteRegStr SHCTX "${PRODUCT_UNINST_REGKEY}" "UninstallString" '"$InstDir\uninstall.exe" /$MultiUser.InstallMode'
+
+    WriteRegStr SHCTX "${PRODUCT_UNINST_REGKEY}" "DisplayName" "$DisplayName"
+    WriteRegStr SHCTX "${PRODUCT_UNINST_REGKEY}" "DisplayVersion" "${PRODUCT_VERSION_STR}"
+    WriteRegDWORD SHCTX "${PRODUCT_UNINST_REGKEY}" "VersionMajor" "${PRODUCT_VERSION_MAJOR}"
+    WriteRegDWORD SHCTX "${PRODUCT_UNINST_REGKEY}" "VersionMinor" "${PRODUCT_VERSION_MINOR}"
+    WriteRegDWORD SHCTX "${PRODUCT_UNINST_REGKEY}" "Version" "${PRODUCT_VERSION_LONG}"
+
+    WriteRegStr SHCTX "${PRODUCT_UNINST_REGKEY}" "Publisher" "${PRODUCT_PUBLISHER}"
+    WriteRegStr SHCTX "${PRODUCT_UNINST_REGKEY}" "URLInfoAbout" "${PRODUCT_URL}"
+    WriteRegStr SHCTX "${PRODUCT_UNINST_REGKEY}" "URLUpdateInfo" "${PRODUCT_UPDATES}"
+    WriteRegStr SHCTX "${PRODUCT_UNINST_REGKEY}" "Contact" "${PRODUCT_CONTACT}"
+
+    WriteRegDWORD SHCTX "${PRODUCT_UNINST_REGKEY}" "NoModify" 1
+    WriteRegDWORD SHCTX "${PRODUCT_UNINST_REGKEY}" "NoRepair" 1
+
+    ; Calculate size of installation
+    ${GetSize} "$InstDir" "/S=0K" $0 $1 $2
+    IntFmt $0 "0x%%08X" $0
+    WriteRegDWORD SHCTX "${PRODUCT_UNINST_REGKEY}" "EstimatedSize" "$0"
+SectionEnd
+
+${MementoSection} "Start Menu" SectionStartMenu
+    !insertmacro MUI_STARTMENU_WRITE_BEGIN PageStartMenu
+        CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
+        CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Uninstall ${PRODUCT_NAME}.lnk" "$InstDir\uninstall.exe /$MultiUser.InstallMode"
+        CreateShortCut "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME}.lnk" "$InstDir\${PRODUCT_EXE}"
+    !insertmacro MUI_STARTMENU_WRITE_END
+${MementoSectionEnd}
+
+${MementoSection} "Shell Extension" SectionShellExt
+
+${MementoSectionEnd}
+
+${MementoUnselectedSection} "Desktop Icon" SectionDesktop
+    CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$InstDir\${PRODUCT_EXE}"
+${MementoSectionEnd}
+
+Section Uninstall
+    ; Remove items in start menu
+    !insertmacro MUI_STARTMENU_GETFOLDER PageStartMenu $R0
+    Delete "$SMPROGRAMS\$R0\Uninstall ${PRODUCT_NAME}.lnk"
+    Delete "$SMPROGRAMS\$R0\${PRODUCT_NAME}.lnk"
+    RMDir /r "$SMPROGRAMS\$R0"
+
+    ; Remove desktop icon
+    Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
+
+    ; Remove installation directory and contents
+    RMDir /r "$InstDir"
+
+    ; Remove registry keys as last action!
+    DeleteRegKey SHCTX "${PRODUCT_UNINST_REGKEY}"
+SectionEnd
+
+${MementoSectionDone}
+
+; --------------------------------
+; Section descriptions
+
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+!insertmacro MUI_DESCRIPTION_TEXT ${SectionMain} "Install core files required to use ${PRODUCT_NAME}"
+!insertmacro MUI_DESCRIPTION_TEXT ${SectionStartMenu} "Create icons in the start menu"
+!insertmacro MUI_DESCRIPTION_TEXT ${SectionShellExt} "Install shell extensions"
+!insertmacro MUI_DESCRIPTION_TEXT ${SectionDesktop} "Create desktop icon for ${PRODUCT_NAME}"
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
+
+; --------------------------------
+; Installer functions
+
+Function .onInit
+    ; Enable logging
+    ; LogSet on
+    ; Verify privileges
+    !insertmacro MULTIUSER_INIT
+    ; Restore the state of all sections from the registry
+    ${MementoSectionRestore}
+FunctionEnd
+
+Function un.onInit
+    ; Verify privileges
+    !insertmacro MULTIUSER_UNINIT
+FunctionEnd
+
+Function .onInstSuccess
+    ; Save the state of all section to the registry
+    ${MementoSectionSave}
+FunctionEnd
+
+Function onMultiUserModeChanged
+    ; Change installation directory depending on selected user
+    StrCpy $DisplayName ${PRODUCT_NAME}
+    ${If} $MultiUser.InstallMode == "CurrentUser"
+        StrCpy $InstDir "$LOCALAPPDATA\${MULTIUSER_INSTALLMODE_INSTDIR}"
+    ${ElseIf} $MultiUser.InstallMode == "AllUsers"
+        StrCpy $InstDir "${ProgramFilesPath}\${MULTIUSER_INSTALLMODE_INSTDIR}"
+        StrCpy $DisplayName "$DisplayName (All Users)"
+    ${Else}
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Unknown installation mode: $MultiUser.InstallMode$\nPlease create issue at ${PRODUCT_CONTACT}." /SD IDOK
+        Quit
+    ${EndIf}
+FunctionEnd
+
+Function StartMenu_Pre
+    ; Skip StartMenu page if start menu was deselected
+    SectionGetFlags ${SectionStartMenu} $R0
+    IntOp $R0 $R0 & ${SF_SELECTED}
+    IntCmp $R0 ${SF_SELECTED} show
+    Abort
+    show:
+FunctionEnd
